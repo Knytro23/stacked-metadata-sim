@@ -21,7 +21,16 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install Pillow piexif pyinstaller fonttools
+        run: pip install Pillow piexif fonttools pyinstaller
+
+      - name: Rebuild PyInstaller bootloader (breaks AV signature)
+        run: |
+          git clone --depth 1 https://github.com/pyinstaller/pyinstaller.git _pyi_src
+          cd _pyi_src\bootloader
+          python waf all --target-arch=64bit
+          cd ..
+          pip install .
+        shell: cmd
 
       - name: Build Windows .exe
         run: pyinstaller stacked.spec
