@@ -90,7 +90,7 @@ def _synthid_strip(img):
 def process_image(src, out_dir, key, sid, log):
     p=PROFILES[key]; ts=_rand_ts(); loc=_rand_loc(); lat,lon=loc["lat"],loc["lon"]
     exif={"0th":{piexif.ImageIFD.Make:p["Make"].encode(),piexif.ImageIFD.Model:p["Model"].encode(),piexif.ImageIFD.Software:p["Software"].encode(),piexif.ImageIFD.DateTime:ts.encode()},
-          "Exif":{piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],piexif.ExifIFD.ISOSpeedRatings:p["ISO"],piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashPixVersion:p["FPV"]},
+          "Exif":{piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],piexif.ExifIFD.ISOSpeedRatings:p["ISO"],piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashpixVersion:p["FPV"]},
           "GPS":{piexif.GPSIFD.GPSLatitudeRef:b"N" if lat>=0 else b"S",piexif.GPSIFD.GPSLatitude:_dms(lat),piexif.GPSIFD.GPSLongitudeRef:b"E" if lon>=0 else b"W",piexif.GPSIFD.GPSLongitude:_dms(lon)},
           "1st":{},"thumbnail":None}
     img=Image.open(src).convert("RGB")
