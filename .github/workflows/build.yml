@@ -21,26 +21,25 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install Pillow piexif pyinstaller
+        run: pip install Pillow piexif pyinstaller fonttools
 
       - name: Build Windows .exe
-        run: |
-          pyinstaller --onefile --windowed `
-            --name "Stacked_MetadataSim" `
-            stacked_metadata_sim.py
+        run: pyinstaller stacked.spec
 
-      - name: Upload Windows artifact
+      - name: Rename for platform
+        run: mv dist/Stacked_MetadataSim.exe dist/Stacked_MetadataSim_Windows.exe
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Stacked_MetadataSim_windows
-          path: dist/Stacked_MetadataSim.exe
+          path: dist/Stacked_MetadataSim_Windows.exe
 
       - name: Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Stacked_MetadataSim.exe
-          name: ${{ github.ref_name }}
+          files: dist/Stacked_MetadataSim_Windows.exe
 
   build-macos:
     runs-on: macos-latest
@@ -53,20 +52,15 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install Pillow piexif pyinstaller
+        run: pip install Pillow piexif pyinstaller fonttools
 
       - name: Build macOS .app
-        run: |
-          pyinstaller --onedir --windowed \
-            --name "Stacked_MetadataSim" \
-            stacked_metadata_sim.py
+        run: pyinstaller stacked.spec
 
       - name: Zip macOS app
-        run: |
-          cd dist
-          zip -r Stacked_MetadataSim_macOS.zip Stacked_MetadataSim.app
+        run: cd dist && zip -r Stacked_MetadataSim_macOS.zip Stacked_MetadataSim.app
 
-      - name: Upload macOS artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Stacked_MetadataSim_macOS
@@ -77,4 +71,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/Stacked_MetadataSim_macOS.zip
-          name: ${{ github.ref_name }}
