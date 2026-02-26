@@ -12,6 +12,8 @@ a = Analysis(
         ('Owners-Bold.otf',     '.'),
         ('Owners-Regular.otf',  '.'),
         ('Owners-XBlack.otf',   '.'),
+        ('icon.ico',            '.'),
+        ('icon.icns',           '.'),
     ],
     hiddenimports=['PIL._tkinter_finder'],
     hookspath=[],
@@ -46,11 +48,12 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='icon.ico',
 )
 
 app = BUNDLE(
     exe,
     name='Stacked_MetadataSim.app',
-    icon=None,
+    icon='icon.icns',
     bundle_identifier='com.stacked.metasim',
 )
