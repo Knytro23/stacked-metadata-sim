@@ -50,8 +50,11 @@ VIDEO_EXTS = {".mp4",".mov",".avi",".mkv",".m4v",".3gp"}
 
 def _res(name):
     """Path to bundled resource (works frozen + dev)."""
-    base = os.path.dirname(sys.executable) if getattr(sys,'frozen',False) \
-           else os.path.dirname(os.path.abspath(__file__))
+    if getattr(sys, 'frozen', False):
+        # PyInstaller one-file: resources extract to sys._MEIPASS temp dir
+        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, name)
 
 def _install_fonts():
