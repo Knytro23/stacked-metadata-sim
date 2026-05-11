@@ -33,22 +33,22 @@ jobs:
         shell: cmd
 
       - name: Build Windows .exe
-        run: pyinstaller stacked.spec
+        run: pyinstaller metadata_simulator.spec
 
       - name: Rename for platform
-        run: mv dist/Stacked_MetadataSim.exe dist/Stacked_MetadataSim_Windows.exe
+        run: mv dist/MetaDataSimulator.exe dist/MetaDataSimulator_Windows.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Stacked_MetadataSim_windows
-          path: dist/Stacked_MetadataSim_Windows.exe
+          name: MetaDataSimulator_windows
+          path: dist/MetaDataSimulator_Windows.exe
 
       - name: Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Stacked_MetadataSim_Windows.exe
+          files: dist/MetaDataSimulator_Windows.exe
 
   build-macos:
     runs-on: macos-latest
@@ -64,19 +64,19 @@ jobs:
         run: pip install Pillow piexif pyinstaller fonttools
 
       - name: Build macOS .app
-        run: pyinstaller stacked.spec
+        run: pyinstaller metadata_simulator.spec
 
       - name: Zip macOS app
-        run: cd dist && zip -r Stacked_MetadataSim_macOS.zip Stacked_MetadataSim.app
+        run: cd dist && zip -r MetaDataSimulator_macOS.zip MetaDataSimulator.app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Stacked_MetadataSim_macOS
-          path: dist/Stacked_MetadataSim_macOS.zip
+          name: MetaDataSimulator_macOS
+          path: dist/MetaDataSimulator_macOS.zip
 
       - name: Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Stacked_MetadataSim_macOS.zip
+          files: dist/MetaDataSimulator_macOS.zip

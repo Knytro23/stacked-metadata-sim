@@ -4,11 +4,10 @@ import os
 block_cipher = None
 
 a = Analysis(
-    ['stacked_metadata_sim.py'],
+    ['metadata_simulator.py'],
     pathex=[],
     binaries=[],
     datas=[
-        ('stacked_logo.png',    '.'),
         ('Owners-Bold.otf',     '.'),
         ('Owners-Regular.otf',  '.'),
         ('Owners-XBlack.otf',   '.'),
@@ -35,7 +34,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Stacked_MetadataSim',
+    name='MetaDataSimulator',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -53,7 +52,7 @@ exe = EXE(
 
 app = BUNDLE(
     exe,
-    name='Stacked_MetadataSim.app',
+    name='MetaDataSimulator.app',
     icon='icon.icns',
-    bundle_identifier='com.stacked.metasim',
+    bundle_identifier='com.metadata.simulator',
 )

@@ -1,10 +1,6 @@
-# Stacked Metadata Simulator
+# Meta Data Simulator
 
 **All-in-one metadata processor for images and videos — backend, hosted form, and embeddable widget in one repo.**
-
-Built by [Stacked](https://stacked.com) · v2.4
-
----
 
 ## What this repo ships
 
@@ -14,7 +10,7 @@ This repo bundles the pieces together:
 
 - **Processing engine** — image/video metadata injection + SynthID mitigation
 - **Hosted web form** — `GET /` for customers or internal users
-- **Processing API** — `POST /api/process` returns `stacked_output.zip`
+- **Processing API** — `POST /api/process` returns `metadata_output.zip`
 - **Embed widget** — `GET /embed.js` mounts a customer-facing upload form
 - **Container packaging** — Dockerfile + compose for one-command local runs and simple deploys
 - **Desktop app** — original Tkinter GUI still available from source/builds
@@ -76,8 +72,8 @@ Open <http://127.0.0.1:8000>.
 Deploy this same repo as a public service, then add the widget where you want the upload form to appear:
 
 ```html
-<div data-stacked-metadata-widget></div>
-<script src="https://YOUR-DOMAIN.com/embed.js" data-stacked-metadata></script>
+<div data-metadata-simulator-widget></div>
+<script src="https://YOUR-DOMAIN.com/embed.js" data-metadata-simulator></script>
 ```
 
 Because `embed.js` and `/api/process` live on the same service, the widget automatically posts uploads back to `https://YOUR-DOMAIN.com/api/process`.
@@ -90,11 +86,11 @@ If you serve the script from a CDN but keep processing on the app service, pass 
   src="https://cdn.YOUR-DOMAIN.com/embed.js"
   data-mount="#metadata-sim"
   data-api="https://app.YOUR-DOMAIN.com"
-  data-stacked-metadata>
+  data-metadata-simulator>
 </script>
 ```
 
-The widget supports multiple files, photos and videos, all device profiles, SynthID removal, and optional GPS randomization. It downloads the processed batch as `stacked_output.zip`.
+The widget supports multiple files, photos and videos, all device profiles, SynthID removal, and optional GPS randomization. It downloads the processed batch as `metadata_output.zip`.
 
 ---
 
@@ -103,7 +99,7 @@ The widget supports multiple files, photos and videos, all device profiles, Synt
 Endpoints:
 
 - `GET /` — hosted web form
-- `POST /api/process` — upload photos/videos, returns `stacked_output.zip`
+- `POST /api/process` — upload photos/videos, returns `metadata_output.zip`
 - `GET /embed.js` — drop-in widget script
 - `GET /profiles` — available profile keys/labels
 - `GET /health` — lightweight health check
@@ -117,7 +113,7 @@ curl -X POST http://127.0.0.1:8000/api/process \
   -F 'profile=IPHONE_14' \
   -F 'remove_synthid=true' \
   -F 'randomize_location=true' \
-  -o stacked_output.zip
+  -o metadata_output.zip
 ```
 
 Supported profile keys:
@@ -135,18 +131,18 @@ Supported profile keys:
 ### Generic Docker host
 
 ```bash
-docker build -t stacked-metadata-sim .
+docker build -t metadata-simulator .
 docker run --rm -p 8000:8000 \
-  -e STACKED_MAX_FILES=50 \
-  -e STACKED_MAX_UPLOAD_MB=512 \
-  stacked-metadata-sim
+  -e METADATA_SIM_MAX_FILES=50 \
+  -e METADATA_SIM_MAX_UPLOAD_MB=512 \
+  metadata-simulator
 ```
 
 Point your domain/reverse proxy at port `8000`, then use:
 
 ```html
-<div data-stacked-metadata-widget></div>
-<script src="https://YOUR-DOMAIN.com/embed.js" data-stacked-metadata></script>
+<div data-metadata-simulator-widget></div>
+<script src="https://YOUR-DOMAIN.com/embed.js" data-metadata-simulator></script>
 ```
 
 ### Render / Railway / Fly.io / similar
@@ -161,8 +157,8 @@ Recommended env vars:
 
 - `HOST=0.0.0.0`
 - `PORT=8000` or the platform-provided port
-- `STACKED_MAX_FILES=50`
-- `STACKED_MAX_UPLOAD_MB=512`
+- `METADATA_SIM_MAX_FILES=50`
+- `METADATA_SIM_MAX_UPLOAD_MB=512`
 - `WEB_TIMEOUT=300` for larger video batches
 
 The Docker image installs `ffmpeg`, so video processing works without extra host setup.
@@ -176,19 +172,19 @@ The Docker image installs `ffmpeg`, so video processing works without extra host
 3. Toggle **Remove SynthID** if needed
 4. Toggle **Randomize GPS Location** if needed
 5. Hit **Start Simulation →**
-6. Output lands in a `stacked_output/` subfolder — originals untouched
+6. Output lands in a `metadata_output/` subfolder — originals untouched
 
 Run desktop app from source:
 
 ```bash
 pip install -r requirements.txt
-python stacked_metadata_sim.py
+python metadata_simulator.py
 ```
 
 Download desktop builds from [Releases](../../releases/latest):
 
-- `Stacked_MetadataSim_windows.exe` — Windows
-- `Stacked_MetadataSim_macOS.zip` — macOS
+- `MetaDataSimulator_Windows.exe` — Windows
+- `MetaDataSimulator_macOS.zip` — macOS
 
 ---
 
@@ -196,11 +192,11 @@ Download desktop builds from [Releases](../../releases/latest):
 
 ```bash
 pip install pyinstaller Pillow piexif
-pyinstaller --onefile --windowed --name Stacked_MetadataSim stacked_metadata_sim.py
+pyinstaller --onefile --windowed --name MetaDataSimulator metadata_simulator.py
 ```
 
 ---
 
 ## License
 
-Private — Stacked internal tool.
+Private internal tool.

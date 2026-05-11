@@ -12,5 +12,5 @@ build
 dist
 *.spec
 .DS_Store
-stacked_output
+metadata_output
 *.zip

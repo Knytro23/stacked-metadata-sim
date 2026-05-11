@@ -1,6 +1,5 @@
 """
-Stacked Metadata Simulator v2.3
-Branding: stacked.com — dark charcoal, white, Owners font
+Meta Data Simulator v2.4
 
 The processing functions in this module are shared by the desktop GUI and the
 all-in-one web service. Tkinter is optional so the server/container can import
@@ -140,7 +139,7 @@ def process_video(src, out_dir, key, sid, log, randomize_location=True):
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("Stacked — Metadata Simulator")
+        self.root.title("Meta Data Simulator")
         self.root.configure(bg=C["bg"])
         self.root.resizable(False, False)
 
@@ -193,7 +192,7 @@ class App:
             command=self._start)
         self.start_btn.pack(side="left", ipady=12)
 
-        tk.Label(foot, text="© Stacked · stacked.com",
+        tk.Label(foot, text="© Meta Data Simulator",
                  font=F["sub"], fg=C["sub"], bg=C["bg"]).pack(side="right")
 
         # ── NAVBAR ────────────────────────────────────────────────────────────
@@ -201,20 +200,7 @@ class App:
         nav.pack(side="top", fill="x")
         nav.pack_propagate(False)
 
-        logo_path = _res("stacked_logo.png")
-        if os.path.exists(logo_path) and PIL_AVAILABLE:
-            try:
-                raw = Image.open(logo_path).convert("RGBA")
-                lh = 26
-                raw = raw.resize((int(raw.width/raw.height*lh), lh), Image.LANCZOS)
-                self._logo_img = ImageTk.PhotoImage(raw)
-                tk.Label(nav, image=self._logo_img, bg=C["bg"]).pack(side="left", padx=28, pady=14)
-            except Exception:
-                tk.Label(nav, text="✦ Stacked", font=F["hero"], fg=C["text"], bg=C["bg"]).pack(side="left", padx=28, pady=12)
-        else:
-            tk.Label(nav, text="✦ Stacked", font=F["hero"], fg=C["text"], bg=C["bg"]).pack(side="left", padx=28, pady=12)
-
-        tk.Label(nav, text="Metadata Simulator", font=F["nav"], fg=C["sub"], bg=C["bg"]).pack(side="left")
+        tk.Label(nav, text="✦ Meta Data Simulator", font=F["hero"], fg=C["text"], bg=C["bg"]).pack(side="left", padx=28, pady=12)
 
         tk.Frame(self.root, bg=C["border"], height=1).pack(side="top", fill="x")
 
@@ -329,7 +315,7 @@ class App:
         randomize_location = self.location_var.get()
         self._log(f"Device: {PROFILES[key]['label']}  ·  SynthID removal: {'on' if sid else 'off'}  ·  GPS randomization: {'on' if randomize_location else 'off'}\n")
 
-        out_dir = os.path.join(folder, "stacked_output")
+        out_dir = os.path.join(folder, "metadata_output")
         os.makedirs(out_dir, exist_ok=True)
 
         files = [f for f in os.listdir(folder) if not os.path.isdir(os.path.join(folder,f))]

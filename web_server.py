@@ -1,11 +1,11 @@
 """
-Website-embeddable server for Stacked Metadata Simulator.
+Website-embeddable server for Meta Data Simulator.
 
 Run:
     python web_server.py
 
 Embed on another site:
-    <script src="https://your-domain.com/embed.js" data-stacked-metadata></script>
+    <script src="https://your-domain.com/embed.js" data-metadata-simulator></script>
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, render_template_string, request, send_file
 from werkzeug.utils import secure_filename
 
-from stacked_metadata_sim import (
+from metadata_simulator import (
     IMAGE_EXTS,
     PIL_AVAILABLE,
     PROFILES,
@@ -28,8 +28,8 @@ from stacked_metadata_sim import (
 )
 
 ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS
-MAX_FILES = int(os.environ.get("STACKED_MAX_FILES", "50"))
-MAX_UPLOAD_MB = int(os.environ.get("STACKED_MAX_UPLOAD_MB", "512"))
+MAX_FILES = int(os.environ.get("METADATA_SIM_MAX_FILES", "50"))
+MAX_UPLOAD_MB = int(os.environ.get("METADATA_SIM_MAX_UPLOAD_MB", "512"))
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
@@ -37,7 +37,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 
 @app.after_request
 def add_embed_headers(response):
-    # Allows the widget to be hosted on a Stacked domain and embedded elsewhere.
+    # Allows the widget to be hosted on one domain and embedded elsewhere.
     response.headers.setdefault("Access-Control-Allow-Origin", "*")
     response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
     response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
@@ -79,7 +79,7 @@ def api_process():
     remove_synthid = _truthy(request.form.get("remove_synthid", "true"))
     randomize_location = _truthy(request.form.get("randomize_location", "true"))
 
-    tmp_root = Path(tempfile.mkdtemp(prefix="stacked_metadata_"))
+    tmp_root = Path(tempfile.mkdtemp(prefix="metadata_simulator_"))
     in_dir = tmp_root / "input"
     out_dir = tmp_root / "output"
     in_dir.mkdir()
@@ -117,7 +117,7 @@ def api_process():
         if ok == 0:
             return jsonify({"error": "Processing failed for every file.", "logs": logs}), 422
 
-        zip_path = tmp_root / "stacked_output.zip"
+        zip_path = tmp_root / "metadata_output.zip"
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for file in out_dir.iterdir():
                 if file.is_file():
@@ -128,11 +128,11 @@ def api_process():
             zip_path,
             mimetype="application/zip",
             as_attachment=True,
-            download_name="stacked_output.zip",
+            download_name="metadata_output.zip",
         )
         response.call_on_close(lambda: shutil.rmtree(tmp_root, ignore_errors=True))
-        response.headers["X-Stacked-Processed"] = str(ok)
-        response.headers["X-Stacked-Failed"] = str(fail)
+        response.headers["X-MetadataSim-Processed"] = str(ok)
+        response.headers["X-MetadataSim-Failed"] = str(fail)
         return response
     except Exception:
         shutil.rmtree(tmp_root, ignore_errors=True)
@@ -159,7 +159,7 @@ PAGE_HTML = """
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stacked Metadata Simulator</title>
+  <title>Meta Data Simulator</title>
   <style>
     body{margin:0;background:#111;color:#fff;font:16px/1.4 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:40px}
     main{max-width:720px;margin:0 auto;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;padding:28px}
@@ -174,7 +174,7 @@ PAGE_HTML = """
 <body><main>
   <h1>Inject. Spoof. Ship.</h1>
   <div class="sub">Batch metadata simulation for photos and videos.</div>
-  <div data-stacked-metadata-widget></div>
+  <div data-metadata-simulator-widget></div>
 </main><script src="/embed.js"></script></body></html>
 """
 
@@ -182,17 +182,17 @@ EMBED_JS = r"""
 (() => {
   const script = document.currentScript;
   const base = (script?.dataset.api || script?.src?.replace(/\/embed\.js(?:\?.*)?$/, '') || '').replace(/\/$/, '');
-  const mount = document.querySelector(script?.dataset.mount || '[data-stacked-metadata-widget]') || script?.parentElement || document.body;
+  const mount = document.querySelector(script?.dataset.mount || '[data-metadata-simulator-widget]') || script?.parentElement || document.body;
   const css = `
-    .stacked-metadata-widget{box-sizing:border-box;max-width:560px;background:#111;color:#fff;border:1px solid #2a2a2a;border-radius:18px;padding:22px;font:15px/1.35 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    .stacked-metadata-widget *{box-sizing:border-box}.stacked-metadata-widget h3{margin:0 0 6px;font-size:24px;letter-spacing:-.03em}.stacked-metadata-widget p{margin:0 0 18px;color:#999}
-    .stacked-metadata-widget label{display:block;color:#aaa;font-size:11px;font-weight:800;text-transform:uppercase;margin:14px 0 7px}.stacked-metadata-widget input[type=file],.stacked-metadata-widget select{width:100%;background:#1a1a1a;color:#fff;border:1px solid #333;border-radius:12px;padding:12px}
-    .stacked-metadata-widget .row{display:flex;gap:10px;align-items:center;color:#ddd;margin:10px 0}.stacked-metadata-widget button{background:#fff;color:#000;border:0;border-radius:999px;padding:12px 16px;font-weight:800;cursor:pointer;margin-top:14px}.stacked-metadata-widget .status{color:#aaa;margin-top:12px;white-space:pre-wrap}
+    .metadata-simulator-widget{box-sizing:border-box;max-width:560px;background:#111;color:#fff;border:1px solid #2a2a2a;border-radius:18px;padding:22px;font:15px/1.35 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .metadata-simulator-widget *{box-sizing:border-box}.metadata-simulator-widget h3{margin:0 0 6px;font-size:24px;letter-spacing:-.03em}.metadata-simulator-widget p{margin:0 0 18px;color:#999}
+    .metadata-simulator-widget label{display:block;color:#aaa;font-size:11px;font-weight:800;text-transform:uppercase;margin:14px 0 7px}.metadata-simulator-widget input[type=file],.metadata-simulator-widget select{width:100%;background:#1a1a1a;color:#fff;border:1px solid #333;border-radius:12px;padding:12px}
+    .metadata-simulator-widget .row{display:flex;gap:10px;align-items:center;color:#ddd;margin:10px 0}.metadata-simulator-widget button{background:#fff;color:#000;border:0;border-radius:999px;padding:12px 16px;font-weight:800;cursor:pointer;margin-top:14px}.metadata-simulator-widget .status{color:#aaa;margin-top:12px;white-space:pre-wrap}
   `;
   const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
-  const wrap = document.createElement('div'); wrap.className = 'stacked-metadata-widget';
+  const wrap = document.createElement('div'); wrap.className = 'metadata-simulator-widget';
   wrap.innerHTML = `
-    <h3>Stacked Metadata Simulator</h3><p>Process photos and videos, then download a clean ZIP.</p>
+    <h3>Meta Data Simulator</h3><p>Process photos and videos, then download a clean ZIP.</p>
     <form><label>Photos / Videos</label><input name="files" type="file" multiple accept="image/*,video/*" required>
     <label>Device Profile</label><select name="profile">
       <option value="IPHONE_15">iPhone 15 Pro</option><option value="IPHONE_14">iPhone 14</option><option value="SAMSUNG_S24">Samsung S24 Ultra</option><option value="PIXEL_8">Pixel 8 Pro</option><option value="MOTO_G_2024">Moto G 2024</option>
@@ -211,8 +211,8 @@ EMBED_JS = r"""
       const res = await fetch(`${base}/api/process`, { method: 'POST', body: data });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Request failed (${res.status})`);
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = 'stacked_output.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      status.textContent = `Done. Processed ${res.headers.get('X-Stacked-Processed') || '?'} file(s).`;
+      a.href = url; a.download = 'metadata_output.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      status.textContent = `Done. Processed ${res.headers.get('X-MetadataSim-Processed') || '?'} file(s).`;
     } catch (err) { status.textContent = err.message || String(err); }
     finally { button.disabled = false; }
   });
