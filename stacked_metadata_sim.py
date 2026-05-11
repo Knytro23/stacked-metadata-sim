@@ -1,16 +1,33 @@
 """
 Stacked Metadata Simulator v2.3
 Branding: stacked.com — dark charcoal, white, Owners font
+
+The processing functions in this module are shared by the desktop GUI and the
+all-in-one web service. Tkinter is optional so the server/container can import
+the media-processing code in headless environments.
 """
-import tkinter as tk
-from tkinter import filedialog, messagebox
 import os, sys, string, random, datetime, subprocess, threading, shutil, platform
 
 try:
-    from PIL import Image, ImageFilter, ImageTk
+    import tkinter as tk
+    from tkinter import filedialog, messagebox
+    TK_AVAILABLE = True
+except ImportError:
+    tk = None
+    filedialog = None
+    messagebox = None
+    TK_AVAILABLE = False
+
+try:
+    from PIL import Image, ImageFilter
+    if TK_AVAILABLE:
+        from PIL import ImageTk
+    else:
+        ImageTk = None
     import piexif
     PIL_AVAILABLE = True
 except ImportError:
+    ImageTk = None
     PIL_AVAILABLE = False
 
 # ─── BRAND COLORS ─────────────────────────────────────────────────────────────
@@ -29,8 +46,10 @@ C = {
 # ─── DEVICE PROFILES ──────────────────────────────────────────────────────────
 PROFILES = {
     "IPHONE_15":   {"label": "iPhone 15 Pro",    "Make": "Apple",   "Model": "iPhone 15 Pro",     "Software": "17.2.1",        "LensMake": "Apple",   "LensModel": "iPhone 15 Pro back triple camera 6.765mm f/1.78", "FocalLength": (677,100), "FNumber": (178,100), "ExposureTime": (1,1000), "ISO": 50,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta": {"make":"Apple","model":"iPhone 15 Pro","com.apple.quicktime.make":"Apple","com.apple.quicktime.model":"iPhone 15 Pro","com.apple.quicktime.software":"17.2.1"}},
+    "IPHONE_14":   {"label": "iPhone 14",        "Make": "Apple",   "Model": "iPhone 14",         "Software": "16.6.1",        "LensMake": "Apple",   "LensModel": "iPhone 14 back dual wide camera 5.7mm f/1.5",       "FocalLength": (570,100), "FNumber": (150,100), "ExposureTime": (1,900),  "ISO": 64,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta": {"make":"Apple","model":"iPhone 14","com.apple.quicktime.make":"Apple","com.apple.quicktime.model":"iPhone 14","com.apple.quicktime.software":"16.6.1"}},
     "SAMSUNG_S24": {"label": "Samsung S24 Ultra", "Make": "samsung", "Model": "SM-S928B",          "Software": "S928BXXU2AXCA", "LensMake": "Samsung", "LensModel": "Samsung Galaxy S24 Ultra rear camera 6.3mm f/1.7",  "FocalLength": (630,100), "FNumber": (170,100), "ExposureTime": (1,1200), "ISO": 64,  "Flash": 0,  "WB": 0, "CS": 1, "EV": b"0220", "FPV": b"0100", "ffmeta": {"make":"samsung","model":"SM-S928B"}},
     "PIXEL_8":     {"label": "Pixel 8 Pro",       "Make": "Google",  "Model": "Pixel 8 Pro",       "Software": "HDR+ 1.0.560z", "LensMake": "Google",  "LensModel": "Pixel 8 Pro back camera 6.81mm f/1.68",          "FocalLength": (681,100), "FNumber": (168,100), "ExposureTime": (1,800),  "ISO": 80,  "Flash": 0,  "WB": 0, "CS": 1, "EV": b"0231", "FPV": b"0100", "ffmeta": {"make":"Google","model":"Pixel 8 Pro"}},
+    "MOTO_G_2024": {"label": "Moto G 2024",      "Make": "motorola", "Model": "moto g 5G - 2024",   "Software": "Android 14",     "LensMake": "motorola", "LensModel": "moto g 5G - 2024 rear camera 4.74mm f/1.8",        "FocalLength": (474,100), "FNumber": (180,100), "ExposureTime": (1,600),  "ISO": 100, "Flash": 0,  "WB": 0, "CS": 1, "EV": b"0220", "FPV": b"0100", "ffmeta": {"make":"motorola","model":"moto g 5G - 2024"}},
 }
 
 LOCATIONS = [
@@ -81,6 +100,8 @@ def _dms(d):
     return ((deg,1),(m,1),(s,100))
 
 def _rand_loc(): return random.choice(LOCATIONS)
+def _default_loc(): return LOCATIONS[0]
+def _pick_loc(randomize=True): return _rand_loc() if randomize else _default_loc()
 def _rand_ts():  return (datetime.datetime.now()-datetime.timedelta(days=random.randint(1,730))).strftime("%Y:%m:%d %H:%M:%S")
 def _rand_tsiso(): return (datetime.datetime.now()-datetime.timedelta(days=random.randint(1,730))).strftime("%Y-%m-%dT%H:%M:%S")
 def _rand_fn(ext): return "IMG_"+"".join(random.choices(string.digits,k=8))+ext
@@ -90,8 +111,8 @@ def _synthid_strip(img):
     img=img.resize((int(w*.997),int(h*.997)),Image.LANCZOS).resize((w,h),Image.LANCZOS)
     return img.filter(ImageFilter.SMOOTH_MORE).filter(ImageFilter.SHARPEN)
 
-def process_image(src, out_dir, key, sid, log):
-    p=PROFILES[key]; ts=_rand_ts(); loc=_rand_loc(); lat,lon=loc["lat"],loc["lon"]
+def process_image(src, out_dir, key, sid, log, randomize_location=True):
+    p=PROFILES[key]; ts=_rand_ts(); loc=_pick_loc(randomize_location); lat,lon=loc["lat"],loc["lon"]
     exif={"0th":{piexif.ImageIFD.Make:p["Make"].encode(),piexif.ImageIFD.Model:p["Model"].encode(),piexif.ImageIFD.Software:p["Software"].encode(),piexif.ImageIFD.DateTime:ts.encode()},
           "Exif":{piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],piexif.ExifIFD.ISOSpeedRatings:p["ISO"],piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashpixVersion:p["FPV"]},
           "GPS":{piexif.GPSIFD.GPSLatitudeRef:b"N" if lat>=0 else b"S",piexif.GPSIFD.GPSLatitude:_dms(lat),piexif.GPSIFD.GPSLongitudeRef:b"E" if lon>=0 else b"W",piexif.GPSIFD.GPSLongitude:_dms(lon)},
@@ -102,8 +123,8 @@ def process_image(src, out_dir, key, sid, log):
     img.save(out,"JPEG",exif=piexif.dump(exif),quality=95)
     log(f"  ✓  {os.path.basename(src)} → {os.path.basename(out)}  [{p['label']} · {loc['name']}{'  · SynthID✗' if sid else ''}]")
 
-def process_video(src, out_dir, key, sid, log):
-    p=PROFILES[key]; ts=_rand_tsiso(); loc=_rand_loc(); lat,lon=loc["lat"],loc["lon"]
+def process_video(src, out_dir, key, sid, log, randomize_location=True):
+    p=PROFILES[key]; ts=_rand_tsiso(); loc=_pick_loc(randomize_location); lat,lon=loc["lat"],loc["lon"]
     out=os.path.join(out_dir,_rand_fn(".mp4"))
     cmd=["ffmpeg","-y","-i",src]
     if sid: cmd+=["-vf","scale=iw*0.997:ih*0.997,scale=iw/0.997:ih/0.997,unsharp=3:3:0.3","-c:v","libx264","-crf",str(random.randint(19,22)),"-preset","slow","-c:a","aac","-b:a","192k"]
@@ -126,6 +147,7 @@ class App:
         self.folder_var  = tk.StringVar()
         self.device_var  = tk.StringVar(value="IPHONE_15")
         self.synthid_var = tk.BooleanVar(value=True)
+        self.location_var = tk.BooleanVar(value=True)
         self.running     = False
         self._logo_img   = None
         self._pill_refs  = {}
@@ -239,6 +261,10 @@ class App:
                        variable=self.synthid_var, font=F["body"],
                        fg=C["text"], bg=C["bg"], selectcolor=C["surface"],
                        activebackground=C["bg"], activeforeground=C["text"]).pack(anchor="w")
+        tk.Checkbutton(sid, text="  Randomize GPS Location",
+                       variable=self.location_var, font=F["body"],
+                       fg=C["text"], bg=C["bg"], selectcolor=C["surface"],
+                       activebackground=C["bg"], activeforeground=C["text"]).pack(anchor="w", pady=(6,0))
 
         tk.Frame(self.root, bg=C["border"], height=1).pack(side="top", fill="x", padx=32)
 
@@ -300,7 +326,8 @@ class App:
     def _worker(self, folder):
         key = self.device_var.get()
         sid = self.synthid_var.get()
-        self._log(f"Device: {PROFILES[key]['label']}  ·  SynthID removal: {'on' if sid else 'off'}\n")
+        randomize_location = self.location_var.get()
+        self._log(f"Device: {PROFILES[key]['label']}  ·  SynthID removal: {'on' if sid else 'off'}  ·  GPS randomization: {'on' if randomize_location else 'off'}\n")
 
         out_dir = os.path.join(folder, "stacked_output")
         os.makedirs(out_dir, exist_ok=True)
@@ -312,10 +339,10 @@ class App:
 
         ok=fail=0
         for f in imgs:
-            try:   process_image(os.path.join(folder,f), out_dir, key, sid, self._log); ok+=1
+            try:   process_image(os.path.join(folder,f), out_dir, key, sid, self._log, randomize_location); ok+=1
             except Exception as e: self._log(f"  ✗  {f} → {e}"); fail+=1
         for f in vids:
-            try:   process_video(os.path.join(folder,f), out_dir, key, sid, self._log); ok+=1
+            try:   process_video(os.path.join(folder,f), out_dir, key, sid, self._log, randomize_location); ok+=1
             except Exception as e: self._log(f"  ✗  {f} → {e}"); fail+=1
 
         self._log(f"\n{'─'*50}\nDone  ·  {ok} processed  ·  {fail} failed\nOutput → {out_dir}")
@@ -324,6 +351,8 @@ class App:
 
 
 if __name__ == "__main__":
+    if not TK_AVAILABLE:
+        raise SystemExit("Tkinter is required for the desktop app. Run web_server.py for the web service.")
     root = tk.Tk()
     App(root)
     root.mainloop()

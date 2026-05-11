@@ -1,0 +1,10 @@
+services:
+  stacked-metadata-sim:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      STACKED_MAX_FILES: 50
+      STACKED_MAX_UPLOAD_MB: 512
