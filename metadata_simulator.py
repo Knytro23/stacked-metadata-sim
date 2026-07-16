@@ -51,17 +51,18 @@ C = {
 }
 
 # ─── DEVICE PROFILES ──────────────────────────────────────────────────────────
-# Each post is spoofed to match the device it is dispatched to. iOS software
-# strings vary slightly per device so a fleet of identical builds is itself not a
-# fingerprint; iOS_POOL supplies a small realistic spread picked per file.
-# CALIBRATION: the ground-truth values (LensModel text, FocalLength, FNumber,
-# ExifVersion) should be validated against a real photo pulled off a fleet device
-# — see calibrate_from_exif(). Values below are best-known defaults.
+# Each post is spoofed to match the device it is dispatched to. iOS_POOL supplies
+# a small realistic spread so a fleet on identical builds isn't itself a tell.
+# CALIBRATED 2026-07-16 against a real fleet iPhone 15 (iphone15,4, iOS 26.5):
+# every IPHONE_15 value below (LensModel/FocalLength/LensSpec/Flash/35mm/software)
+# is copied from that device's actual EXIF. 15 Pro / 14 / Pixel are best-known and
+# still want a real-device dump to be pixel-exact. "extra" fields are the
+# secondary EXIF tags real iPhones always write (metering/exposure/lens spec).
 PROFILES = {
-    "IPHONE_15":     {"label": "iPhone 15",         "Make": "Apple",    "Model": "iPhone 15",         "iOS_POOL": ["17.5.1","17.6.1","18.1.1","18.2.1"], "LensMake": "Apple",    "LensModel": "iPhone 15 back dual camera 6.86mm f/1.6",   "FocalLength": (686,100), "FNumber": (160,100), "ExposureTime": (1,1000), "ISO": 64,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 15"},
-    "IPHONE_15_PRO": {"label": "iPhone 15 Pro",     "Make": "Apple",    "Model": "iPhone 15 Pro",     "iOS_POOL": ["17.5.1","17.6.1","18.1.1","18.2.1"], "LensMake": "Apple",    "LensModel": "iPhone 15 Pro back triple camera 6.765mm f/1.78", "FocalLength": (677,100), "FNumber": (178,100), "ExposureTime": (1,1000), "ISO": 50, "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 15 Pro"},
-    "IPHONE_14":     {"label": "iPhone 14",         "Make": "Apple",    "Model": "iPhone 14",         "iOS_POOL": ["16.6.1","17.5.1","17.6.1","18.1.1"], "LensMake": "Apple",    "LensModel": "iPhone 14 back dual camera 5.7mm f/1.5",  "FocalLength": (570,100), "FNumber": (150,100), "ExposureTime": (1,900),  "ISO": 64,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 14"},
-    "PIXEL_8":       {"label": "Pixel 8",           "Make": "Google",   "Model": "Pixel 8",           "iOS_POOL": ["HDR+ 1.0.680000000","HDR+ 1.0.690000000"], "LensMake": "Google", "LensModel": "Pixel 8 back camera 6.9mm f/1.68",       "FocalLength": (690,100), "FNumber": (168,100), "ExposureTime": (1,800),  "ISO": 80,  "Flash": 0, "WB": 0, "CS": 1, "EV": b"0231", "FPV": b"0100", "ffmeta_model": "Pixel 8"},
+    "IPHONE_15":     {"label": "iPhone 15",     "Make": "Apple",  "Model": "iPhone 15",     "iOS_POOL": ["26.3.1","26.4","26.5"], "LensMake": "Apple",  "LensModel": "iPhone 15 back dual wide camera 5.96mm f/1.6",   "FocalLength": (596,100), "FocalLength35": 26, "FNumber": (160,100), "LensSpec": ((154,100),(596,100),(160,100),(240,100)), "ExposureTime": (1,86),  "ISO": 125, "Flash": 16, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 15"},
+    "IPHONE_15_PRO": {"label": "iPhone 15 Pro", "Make": "Apple",  "Model": "iPhone 15 Pro", "iOS_POOL": ["26.3.1","26.4","26.5"], "LensMake": "Apple",  "LensModel": "iPhone 15 Pro back triple camera 6.765mm f/1.78", "FocalLength": (677,100), "FocalLength35": 24, "FNumber": (178,100), "LensSpec": ((6765,1000),(1554,100),(178,100),(280,100)), "ExposureTime": (1,120), "ISO": 80,  "Flash": 16, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 15 Pro"},
+    "IPHONE_14":     {"label": "iPhone 14",     "Make": "Apple",  "Model": "iPhone 14",     "iOS_POOL": ["26.3.1","26.4","26.5"], "LensMake": "Apple",  "LensModel": "iPhone 14 back dual wide camera 5.7mm f/1.5",  "FocalLength": (570,100), "FocalLength35": 26, "FNumber": (150,100), "LensSpec": ((15,10),(57,10),(15,10),(24,10)), "ExposureTime": (1,120), "ISO": 80,  "Flash": 16, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 14"},
+    "PIXEL_8":       {"label": "Pixel 8",       "Make": "Google", "Model": "Pixel 8",       "iOS_POOL": ["HDR+ 1.0.680000000"], "LensMake": "Google", "LensModel": "Pixel 8 back camera 6.9mm f/1.68",       "FocalLength": (690,100), "FocalLength35": 25, "FNumber": (168,100), "LensSpec": None, "ExposureTime": (1,120), "ISO": 90, "Flash": 0, "WB": 0, "CS": 1, "EV": b"0231", "FPV": b"0100", "ffmeta_model": "Pixel 8"},
 }
 
 # Maps whatever model string the swarm device carries (raw identifier like
@@ -99,10 +100,10 @@ def resolve_profile(device_model):
 # gets a small random offset (JITTER_DEG, ~a few km) so no two posts of the same
 # source image ever carry the identical GPS point.
 LOCATIONS = [
-    {"name": "Los Angeles",     "lat": 34.0522, "lon": -118.2437},
-    {"name": "Birmingham, AL",  "lat": 33.5186, "lon":  -86.8104},
-    {"name": "New York City",   "lat": 40.7128, "lon":  -74.0060},
-    {"name": "Miami",           "lat": 25.7617, "lon":  -80.1918},
+    {"name": "Los Angeles",     "lat": 34.0522, "lon": -118.2437, "tz": "-07:00"},
+    {"name": "Birmingham, AL",  "lat": 33.5186, "lon":  -86.8104, "tz": "-05:00"},
+    {"name": "New York City",   "lat": 40.7128, "lon":  -74.0060, "tz": "-04:00"},
+    {"name": "Miami",           "lat": 25.7617, "lon":  -80.1918, "tz": "-04:00"},
 ]
 JITTER_DEG = 0.045  # ~5 km at these latitudes
 
@@ -150,6 +151,7 @@ def _jittered_loc(randomize=True):
         "lat": loc["lat"] + random.uniform(-JITTER_DEG, JITTER_DEG),
         "lon": loc["lon"] + random.uniform(-JITTER_DEG, JITTER_DEG),
         "alt": round(random.uniform(2, 180), 1),
+        "tz": loc["tz"],
     }
 
 def _rand_dt():  return datetime.datetime.now()-datetime.timedelta(days=random.randint(1,120),seconds=random.randint(0,86399))
@@ -192,12 +194,25 @@ def _synthid_strip(img):
 
 def process_image(src, out_dir, key, sid, log, randomize_location=True):
     p=PROFILES[key]; dt=_rand_dt(); ts=dt.strftime("%Y:%m:%d %H:%M:%S")
-    loc=_jittered_loc(randomize_location); sw=_iso_software(p)
+    loc=_jittered_loc(randomize_location); sw=_iso_software(p); tz=loc["tz"].encode()
+    iso=int(p["ISO"]*random.uniform(0.7,1.6))  # per-shot ISO spread, not a fixed tell
+    zeroth={piexif.ImageIFD.Make:p["Make"].encode(),piexif.ImageIFD.Model:p["Model"].encode(),piexif.ImageIFD.Software:sw.encode(),piexif.ImageIFD.DateTime:ts.encode(),piexif.ImageIFD.XResolution:(72,1),piexif.ImageIFD.YResolution:(72,1),piexif.ImageIFD.ResolutionUnit:2,piexif.ImageIFD.Orientation:1}
+    if p["Make"]=="Apple":  # real iPhones write HostComputer = model
+        zeroth[piexif.ImageIFD.HostComputer]=p["Model"].encode()
+    exf={piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.DateTimeDigitized:ts.encode(),
+         piexif.ExifIFD.OffsetTime:tz,piexif.ExifIFD.OffsetTimeOriginal:tz,piexif.ExifIFD.OffsetTimeDigitized:tz,
+         piexif.ExifIFD.SubSecTimeOriginal:str(random.randint(100,999)).encode(),
+         piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),
+         piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FocalLengthIn35mmFilm:p["FocalLength35"],
+         piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],
+         piexif.ExifIFD.ISOSpeedRatings:iso,piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],
+         piexif.ExifIFD.MeteringMode:5,piexif.ExifIFD.ExposureProgram:2,piexif.ExifIFD.ExposureMode:0,
+         piexif.ExifIFD.SensingMethod:2,piexif.ExifIFD.SceneType:b"\x01",
+         piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashpixVersion:p["FPV"]}
+    if p.get("LensSpec"):
+        exf[piexif.ExifIFD.LensSpecification]=p["LensSpec"]
     # Rebuilt from scratch, so ALL original EXIF/XMP/C2PA AI provenance is dropped.
-    exif={"0th":{piexif.ImageIFD.Make:p["Make"].encode(),piexif.ImageIFD.Model:p["Model"].encode(),piexif.ImageIFD.Software:sw.encode(),piexif.ImageIFD.DateTime:ts.encode()},
-          "Exif":{piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.DateTimeDigitized:ts.encode(),piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],piexif.ExifIFD.ISOSpeedRatings:p["ISO"],piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashpixVersion:p["FPV"]},
-          "GPS":_gps_block(loc, dt),
-          "1st":{},"thumbnail":None}
+    exif={"0th":zeroth,"Exif":exf,"GPS":_gps_block(loc, dt),"1st":{},"thumbnail":None}
     img=Image.open(src).convert("RGB")
     if sid: img=_synthid_strip(img)
     out=os.path.join(out_dir,_rand_fn(".jpg"))
@@ -208,7 +223,9 @@ def process_image(src, out_dir, key, sid, log, randomize_location=True):
 
 def process_video(src, out_dir, key, sid, log, randomize_location=True):
     p=PROFILES[key]; dt=_rand_dt(); ts=dt.strftime("%Y-%m-%dT%H:%M:%S")
-    loc=_jittered_loc(randomize_location); lat,lon=loc["lat"],loc["lon"]
+    loc=_jittered_loc(randomize_location); lat,lon,alt,tz=loc["lat"],loc["lon"],loc["alt"],loc["tz"]
+    iso6709=f"{lat:+08.4f}{lon:+09.4f}{alt:+08.3f}/"  # real iPhones include altitude
+    createdate=f"{ts}{tz.replace(':','')}"             # creationdate tz is "-0700", no colon
     out=os.path.join(out_dir,_rand_fn(".mp4"))
     # -map_metadata -1 drops ALL source container metadata (incl. AI/C2PA tags)
     # before we write our own.
@@ -219,10 +236,10 @@ def process_video(src, out_dir, key, sid, log, randomize_location=True):
     else:   cmd+=["-c:v","libx264","-crf","20","-preset","medium","-pix_fmt","yuv420p","-c:a","aac"]
     cmd+=["-metadata",f"make={p['Make']}","-metadata",f"model={p['ffmeta_model']}"]
     if p["Make"]=="Apple":
-        cmd+=["-metadata",f"com.apple.quicktime.make={p['Make']}","-metadata",f"com.apple.quicktime.model={p['ffmeta_model']}","-metadata",f"com.apple.quicktime.software={_iso_software(p)}"]
+        cmd+=["-metadata",f"com.apple.quicktime.make={p['Make']}","-metadata",f"com.apple.quicktime.model={p['ffmeta_model']}","-metadata",f"com.apple.quicktime.software={_iso_software(p)}","-metadata",f"com.apple.quicktime.creationdate={createdate}"]
     # use_metadata_tags is required for the com.apple.quicktime.* keys to persist
     # into the mov metadata atom instead of being dropped as non-standard.
-    cmd+=["-metadata",f"creation_time={ts}","-metadata",f"location={lat:+.4f}{lon:+.4f}/","-metadata",f"com.apple.quicktime.location.ISO6709={lat:+.4f}{lon:+.4f}/","-movflags","use_metadata_tags+faststart",out]
+    cmd+=["-metadata",f"creation_time={ts}","-metadata",f"location={iso6709}","-metadata",f"com.apple.quicktime.location.ISO6709={iso6709}","-movflags","use_metadata_tags+faststart",out]
     r=subprocess.run(cmd,capture_output=True,text=True)
     if r.returncode!=0: raise RuntimeError(r.stderr[-200:])
     log(f"  ✓  {os.path.basename(src)} → {os.path.basename(out)}  [{p['label']} · {loc['name']}{'  · SynthID✗' if sid else ''}]")
