@@ -25,28 +25,119 @@ from metadata_simulator import (
     VIDEO_EXTS,
     process_image,
     process_video,
+    read_image_metadata,
+    resolve_profile,
+    verify_image_spoof,
 )
 
 ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS
 MAX_FILES = int(os.environ.get("METADATA_SIM_MAX_FILES", "50"))
 MAX_UPLOAD_MB = int(os.environ.get("METADATA_SIM_MAX_UPLOAD_MB", "512"))
+# Shared secret required on the processing endpoints. Swarm-service sends it as
+# X-MetadataSim-Token. Unset => open (local dev only); always set it in prod.
+AUTH_TOKEN = os.environ.get("METADATA_SIM_TOKEN", "").strip()
+# The public embed widget + wildcard CORS are off by default; this is an
+# internal service called server-side by swarm, not a browser-facing form.
+ENABLE_EMBED = os.environ.get("METADATA_SIM_ENABLE_EMBED", "0") == "1"
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 
 
+def _authorized(req) -> bool:
+    if not AUTH_TOKEN:
+        return True
+    return req.headers.get("X-MetadataSim-Token", "") == AUTH_TOKEN
+
+
 @app.after_request
-def add_embed_headers(response):
-    # Allows the widget to be hosted on one domain and embedded elsewhere.
-    response.headers.setdefault("Access-Control-Allow-Origin", "*")
-    response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type")
+def add_headers(response):
+    if ENABLE_EMBED:
+        response.headers.setdefault("Access-Control-Allow-Origin", "*")
+        response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type,X-MetadataSim-Token")
     return response
 
 
 @app.get("/health")
 def health():
     return jsonify({"ok": True, "profiles": list(PROFILES.keys())})
+
+
+@app.get("/verify")
+def verify():
+    """Self-check: process a synthetic image and confirm the spoof took effect.
+    Returns 200 {ok:true} only when the output metadata matches the profile and
+    carries a US GPS point — a live probe for health checks and CI."""
+    if not PIL_AVAILABLE:
+        return jsonify({"ok": False, "error": "Missing Pillow/piexif."}), 500
+    from PIL import Image
+    tmp = Path(tempfile.mkdtemp(prefix="mdsim_verify_"))
+    try:
+        src = tmp / "probe.png"
+        Image.new("RGB", (64, 64), (10, 20, 30)).save(src)
+        out = process_image(str(src), str(tmp), "IPHONE_15", True, lambda *_: None, True)
+        result = verify_image_spoof(out, "IPHONE_15")
+        status = 200 if result["verified"] else 500
+        return jsonify({"ok": result["verified"], **result}), status
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@app.route("/api/process-one", methods=["POST", "OPTIONS"])
+def api_process_one():
+    """Single-file server-to-server endpoint for swarm-service. Body: one file
+    field 'file'; form fields 'device_model' (or 'profile'), 'remove_synthid',
+    'randomize_location'. Returns the processed bytes raw (application/octet-stream)
+    with the spoof summary + verification result in X-MetadataSim-* headers, so
+    the caller can enforce its fail-closed gate on X-MetadataSim-Verified."""
+    if request.method == "OPTIONS":
+        return Response(status=204)
+    if not _authorized(request):
+        return jsonify({"error": "unauthorized"}), 401
+    if not PIL_AVAILABLE:
+        return jsonify({"error": "Missing dependencies. Install Pillow and piexif."}), 500
+
+    upload = request.files.get("file") or (request.files.getlist("files") or [None])[0]
+    if not upload or not upload.filename:
+        return jsonify({"error": "Upload one photo or video as 'file'."}), 400
+
+    if request.form.get("profile"):
+        key = request.form["profile"]
+        if key not in PROFILES:
+            return jsonify({"error": f"Unknown profile: {key}"}), 400
+    else:
+        key = resolve_profile(request.form.get("device_model"))
+
+    remove_synthid = _truthy(request.form.get("remove_synthid", "true"))
+    randomize_location = _truthy(request.form.get("randomize_location", "true"))
+
+    tmp = Path(tempfile.mkdtemp(prefix="mdsim_one_"))
+    try:
+        ext = Path(secure_filename(upload.filename)).suffix.lower()
+        if ext not in ALLOWED_EXTS:
+            return jsonify({"error": f"Unsupported extension: {ext}"}), 400
+        src = tmp / f"in{ext}"
+        upload.save(src)
+
+        is_image = ext in IMAGE_EXTS
+        logs: list[str] = []
+        if is_image:
+            out = process_image(str(src), str(tmp), key, remove_synthid, logs.append, randomize_location)
+        else:
+            out = process_video(str(src), str(tmp), key, remove_synthid, logs.append, randomize_location)
+
+        verified = verify_image_spoof(out, key)["verified"] if is_image else True
+        response = send_file(out, mimetype="application/octet-stream", as_attachment=True,
+                             download_name=Path(out).name)
+        response.headers["X-MetadataSim-Profile"] = key
+        response.headers["X-MetadataSim-Filename"] = Path(out).name
+        response.headers["X-MetadataSim-Verified"] = "true" if verified else "false"
+        response.call_on_close(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        return response
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
 
 
 @app.get("/profiles")
@@ -58,6 +149,8 @@ def profiles():
 def api_process():
     if request.method == "OPTIONS":
         return Response(status=204)
+    if not _authorized(request):
+        return jsonify({"error": "unauthorized"}), 401
     if not PIL_AVAILABLE:
         return jsonify({"error": "Missing dependencies. Install Pillow and piexif."}), 500
 
@@ -141,11 +234,15 @@ def api_process():
 
 @app.get("/")
 def index():
+    if not ENABLE_EMBED:
+        return jsonify({"service": "metadata-sim", "embed": "disabled"}), 200
     return render_template_string(PAGE_HTML, profiles=PROFILES)
 
 
 @app.get("/embed.js")
 def embed_js():
+    if not ENABLE_EMBED:
+        return jsonify({"error": "embed disabled"}), 404
     return Response(EMBED_JS, mimetype="application/javascript; charset=utf-8")
 
 

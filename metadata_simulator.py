@@ -29,6 +29,14 @@ except ImportError:
     ImageTk = None
     PIL_AVAILABLE = False
 
+# HEIC is the default iPhone capture format; register the opener when available
+# so .heic inputs decode (output is always re-encoded JPEG regardless).
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 # ─── BRAND COLORS ─────────────────────────────────────────────────────────────
 C = {
     "bg":      "#111111",
@@ -43,24 +51,60 @@ C = {
 }
 
 # ─── DEVICE PROFILES ──────────────────────────────────────────────────────────
+# Each post is spoofed to match the device it is dispatched to. iOS software
+# strings vary slightly per device so a fleet of identical builds is itself not a
+# fingerprint; iOS_POOL supplies a small realistic spread picked per file.
+# CALIBRATION: the ground-truth values (LensModel text, FocalLength, FNumber,
+# ExifVersion) should be validated against a real photo pulled off a fleet device
+# — see calibrate_from_exif(). Values below are best-known defaults.
 PROFILES = {
-    "IPHONE_15":   {"label": "iPhone 15 Pro",    "Make": "Apple",   "Model": "iPhone 15 Pro",     "Software": "17.2.1",        "LensMake": "Apple",   "LensModel": "iPhone 15 Pro back triple camera 6.765mm f/1.78", "FocalLength": (677,100), "FNumber": (178,100), "ExposureTime": (1,1000), "ISO": 50,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta": {"make":"Apple","model":"iPhone 15 Pro","com.apple.quicktime.make":"Apple","com.apple.quicktime.model":"iPhone 15 Pro","com.apple.quicktime.software":"17.2.1"}},
-    "IPHONE_14":   {"label": "iPhone 14",        "Make": "Apple",   "Model": "iPhone 14",         "Software": "16.6.1",        "LensMake": "Apple",   "LensModel": "iPhone 14 back dual wide camera 5.7mm f/1.5",       "FocalLength": (570,100), "FNumber": (150,100), "ExposureTime": (1,900),  "ISO": 64,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta": {"make":"Apple","model":"iPhone 14","com.apple.quicktime.make":"Apple","com.apple.quicktime.model":"iPhone 14","com.apple.quicktime.software":"16.6.1"}},
-    "SAMSUNG_S24": {"label": "Samsung S24 Ultra", "Make": "samsung", "Model": "SM-S928B",          "Software": "S928BXXU2AXCA", "LensMake": "Samsung", "LensModel": "Samsung Galaxy S24 Ultra rear camera 6.3mm f/1.7",  "FocalLength": (630,100), "FNumber": (170,100), "ExposureTime": (1,1200), "ISO": 64,  "Flash": 0,  "WB": 0, "CS": 1, "EV": b"0220", "FPV": b"0100", "ffmeta": {"make":"samsung","model":"SM-S928B"}},
-    "PIXEL_8":     {"label": "Pixel 8 Pro",       "Make": "Google",  "Model": "Pixel 8 Pro",       "Software": "HDR+ 1.0.560z", "LensMake": "Google",  "LensModel": "Pixel 8 Pro back camera 6.81mm f/1.68",          "FocalLength": (681,100), "FNumber": (168,100), "ExposureTime": (1,800),  "ISO": 80,  "Flash": 0,  "WB": 0, "CS": 1, "EV": b"0231", "FPV": b"0100", "ffmeta": {"make":"Google","model":"Pixel 8 Pro"}},
-    "MOTO_G_2024": {"label": "Moto G 2024",      "Make": "motorola", "Model": "moto g 5G - 2024",   "Software": "Android 14",     "LensMake": "motorola", "LensModel": "moto g 5G - 2024 rear camera 4.74mm f/1.8",        "FocalLength": (474,100), "FNumber": (180,100), "ExposureTime": (1,600),  "ISO": 100, "Flash": 0,  "WB": 0, "CS": 1, "EV": b"0220", "FPV": b"0100", "ffmeta": {"make":"motorola","model":"moto g 5G - 2024"}},
+    "IPHONE_15":     {"label": "iPhone 15",         "Make": "Apple",    "Model": "iPhone 15",         "iOS_POOL": ["17.5.1","17.6.1","18.1.1","18.2.1"], "LensMake": "Apple",    "LensModel": "iPhone 15 back dual camera 6.86mm f/1.6",   "FocalLength": (686,100), "FNumber": (160,100), "ExposureTime": (1,1000), "ISO": 64,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 15"},
+    "IPHONE_15_PRO": {"label": "iPhone 15 Pro",     "Make": "Apple",    "Model": "iPhone 15 Pro",     "iOS_POOL": ["17.5.1","17.6.1","18.1.1","18.2.1"], "LensMake": "Apple",    "LensModel": "iPhone 15 Pro back triple camera 6.765mm f/1.78", "FocalLength": (677,100), "FNumber": (178,100), "ExposureTime": (1,1000), "ISO": 50, "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 15 Pro"},
+    "IPHONE_14":     {"label": "iPhone 14",         "Make": "Apple",    "Model": "iPhone 14",         "iOS_POOL": ["16.6.1","17.5.1","17.6.1","18.1.1"], "LensMake": "Apple",    "LensModel": "iPhone 14 back dual camera 5.7mm f/1.5",  "FocalLength": (570,100), "FNumber": (150,100), "ExposureTime": (1,900),  "ISO": 64,  "Flash": 24, "WB": 0, "CS": 1, "EV": b"0232", "FPV": b"0100", "ffmeta_model": "iPhone 14"},
+    "PIXEL_8":       {"label": "Pixel 8",           "Make": "Google",   "Model": "Pixel 8",           "iOS_POOL": ["HDR+ 1.0.680000000","HDR+ 1.0.690000000"], "LensMake": "Google", "LensModel": "Pixel 8 back camera 6.9mm f/1.68",       "FocalLength": (690,100), "FNumber": (168,100), "ExposureTime": (1,800),  "ISO": 80,  "Flash": 0, "WB": 0, "CS": 1, "EV": b"0231", "FPV": b"0100", "ffmeta_model": "Pixel 8"},
 }
 
+# Maps whatever model string the swarm device carries (raw identifier like
+# "iphone15,4", friendly name like "iPhone 15 Pro", or an Android model) to a
+# profile key. Unknown iPhones fall back to IPHONE_15, unknown Androids to PIXEL_8.
+DEVICE_MODEL_MAP = {
+    "iphone15,4": "IPHONE_15", "iphone15,5": "IPHONE_15",
+    "iphone16,1": "IPHONE_15_PRO", "iphone16,2": "IPHONE_15_PRO",
+    "iphone14,7": "IPHONE_14", "iphone14,8": "IPHONE_14",
+    "iphone 15": "IPHONE_15", "iphone 15 plus": "IPHONE_15",
+    "iphone 15 pro": "IPHONE_15_PRO", "iphone 15 pro max": "IPHONE_15_PRO",
+    "iphone 14": "IPHONE_14", "iphone 14 plus": "IPHONE_14",
+    "pixel 8": "PIXEL_8", "pixel 8 pro": "PIXEL_8",
+}
+DEFAULT_PROFILE = "IPHONE_15"
+
+
+def resolve_profile(device_model):
+    """Pick a profile key for a swarm device's model string (see DEVICE_MODEL_MAP)."""
+    if not device_model:
+        return DEFAULT_PROFILE
+    key = str(device_model).strip().lower()
+    if key.upper() in PROFILES:
+        return key.upper()
+    if key in DEVICE_MODEL_MAP:
+        return DEVICE_MODEL_MAP[key]
+    if "iphone" in key:
+        return "IPHONE_15_PRO" if "pro" in key else "IPHONE_15"
+    if "pixel" in key or "android" in key or "sm-" in key or "moto" in key:
+        return "PIXEL_8"
+    return DEFAULT_PROFILE
+
+
+# US-only locations for a US-audience fleet. Each is a metro center; every file
+# gets a small random offset (JITTER_DEG, ~a few km) so no two posts of the same
+# source image ever carry the identical GPS point.
 LOCATIONS = [
-    {"name":"New York City", "lat": 40.7128, "lon": -74.0060},
-    {"name":"Los Angeles",   "lat": 34.0522, "lon":-118.2437},
-    {"name":"Miami",         "lat": 25.7617, "lon": -80.1918},
-    {"name":"London",        "lat": 51.5074, "lon":  -0.1278},
-    {"name":"Paris",         "lat": 48.8566, "lon":   2.3522},
-    {"name":"Tokyo",         "lat": 35.6762, "lon": 139.6503},
-    {"name":"Dubai",         "lat": 25.2048, "lon":  55.2708},
-    {"name":"Sydney",        "lat":-33.8688, "lon": 151.2093},
+    {"name": "Los Angeles",     "lat": 34.0522, "lon": -118.2437},
+    {"name": "Birmingham, AL",  "lat": 33.5186, "lon":  -86.8104},
+    {"name": "New York City",   "lat": 40.7128, "lon":  -74.0060},
+    {"name": "Miami",           "lat": 25.7617, "lon":  -80.1918},
 ]
+JITTER_DEG = 0.045  # ~5 km at these latitudes
 
 IMAGE_EXTS = {".jpg",".jpeg",".tiff",".tif",".png",".webp",".heic"}
 VIDEO_EXTS = {".mp4",".mov",".avi",".mkv",".m4v",".3gp"}
@@ -98,41 +142,124 @@ def _dms(d):
     deg=int(abs(d)); mf=(abs(d)-deg)*60; m=int(mf); s=round((mf-m)*60*100)
     return ((deg,1),(m,1),(s,100))
 
-def _rand_loc(): return random.choice(LOCATIONS)
-def _default_loc(): return LOCATIONS[0]
-def _pick_loc(randomize=True): return _rand_loc() if randomize else _default_loc()
-def _rand_ts():  return (datetime.datetime.now()-datetime.timedelta(days=random.randint(1,730))).strftime("%Y:%m:%d %H:%M:%S")
-def _rand_tsiso(): return (datetime.datetime.now()-datetime.timedelta(days=random.randint(1,730))).strftime("%Y-%m-%dT%H:%M:%S")
-def _rand_fn(ext): return "IMG_"+"".join(random.choices(string.digits,k=8))+ext
+def _jittered_loc(randomize=True):
+    """A US metro, offset by a small random amount so no two posts share a point."""
+    loc = random.choice(LOCATIONS) if randomize else LOCATIONS[0]
+    return {
+        "name": loc["name"],
+        "lat": loc["lat"] + random.uniform(-JITTER_DEG, JITTER_DEG),
+        "lon": loc["lon"] + random.uniform(-JITTER_DEG, JITTER_DEG),
+        "alt": round(random.uniform(2, 180), 1),
+    }
+
+def _rand_dt():  return datetime.datetime.now()-datetime.timedelta(days=random.randint(1,120),seconds=random.randint(0,86399))
+def _rand_fn(ext): return "IMG_"+"".join(random.choices(string.digits,k=4))+"".join(random.choices(string.ascii_uppercase,k=4))+ext
+
+def _iso_software(p):
+    return random.choice(p.get("iOS_POOL") or [p.get("Software","")])
+
+def _gps_block(loc, dt):
+    """Full GPS IFD an iPhone actually writes: lat/lon + ref, altitude, and a
+    timestamp coherent with the capture time."""
+    lat, lon, alt = loc["lat"], loc["lon"], loc["alt"]
+    return {
+        piexif.GPSIFD.GPSLatitudeRef: b"N" if lat>=0 else b"S",
+        piexif.GPSIFD.GPSLatitude: _dms(lat),
+        piexif.GPSIFD.GPSLongitudeRef: b"E" if lon>=0 else b"W",
+        piexif.GPSIFD.GPSLongitude: _dms(lon),
+        piexif.GPSIFD.GPSAltitudeRef: 0,
+        piexif.GPSIFD.GPSAltitude: (int(round(alt*100)), 100),
+        piexif.GPSIFD.GPSHPositioningError: (random.randint(3,12), 1),
+        piexif.GPSIFD.GPSDateStamp: dt.strftime("%Y:%m:%d").encode(),
+        piexif.GPSIFD.GPSTimeStamp: ((dt.hour,1),(dt.minute,1),(dt.second,1)),
+    }
 
 def _synthid_strip(img):
+    """Pixel-domain mitigation for invisible watermarks (Google SynthID and
+    similar): a sub-pixel resize round-trip + smooth/sharpen + faint noise
+    perturbs the high-frequency signal these watermarks ride on. This degrades
+    them and, combined with JPEG re-encoding, is not a cryptographic removal
+    guarantee — the metadata-level AI markers ARE fully stripped (see below)."""
     w,h=img.size
-    img=img.resize((int(w*.997),int(h*.997)),Image.LANCZOS).resize((w,h),Image.LANCZOS)
-    return img.filter(ImageFilter.SMOOTH_MORE).filter(ImageFilter.SHARPEN)
+    img=img.resize((int(w*.995),int(h*.995)),Image.LANCZOS).resize((w,h),Image.LANCZOS)
+    img=img.filter(ImageFilter.SMOOTH_MORE).filter(ImageFilter.SHARPEN)
+    px=img.load()
+    for _ in range(int(w*h*0.02)):  # sparse ±1 dither over ~2% of pixels
+        x=random.randrange(w); y=random.randrange(h); r,g,b=px[x,y]
+        d=random.choice((-1,1))
+        px[x,y]=(max(0,min(255,r+d)),max(0,min(255,g+d)),max(0,min(255,b+d)))
+    return img
 
 def process_image(src, out_dir, key, sid, log, randomize_location=True):
-    p=PROFILES[key]; ts=_rand_ts(); loc=_pick_loc(randomize_location); lat,lon=loc["lat"],loc["lon"]
-    exif={"0th":{piexif.ImageIFD.Make:p["Make"].encode(),piexif.ImageIFD.Model:p["Model"].encode(),piexif.ImageIFD.Software:p["Software"].encode(),piexif.ImageIFD.DateTime:ts.encode()},
-          "Exif":{piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],piexif.ExifIFD.ISOSpeedRatings:p["ISO"],piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashpixVersion:p["FPV"]},
-          "GPS":{piexif.GPSIFD.GPSLatitudeRef:b"N" if lat>=0 else b"S",piexif.GPSIFD.GPSLatitude:_dms(lat),piexif.GPSIFD.GPSLongitudeRef:b"E" if lon>=0 else b"W",piexif.GPSIFD.GPSLongitude:_dms(lon)},
+    p=PROFILES[key]; dt=_rand_dt(); ts=dt.strftime("%Y:%m:%d %H:%M:%S")
+    loc=_jittered_loc(randomize_location); sw=_iso_software(p)
+    # Rebuilt from scratch, so ALL original EXIF/XMP/C2PA AI provenance is dropped.
+    exif={"0th":{piexif.ImageIFD.Make:p["Make"].encode(),piexif.ImageIFD.Model:p["Model"].encode(),piexif.ImageIFD.Software:sw.encode(),piexif.ImageIFD.DateTime:ts.encode()},
+          "Exif":{piexif.ExifIFD.DateTimeOriginal:ts.encode(),piexif.ExifIFD.DateTimeDigitized:ts.encode(),piexif.ExifIFD.LensMake:p["LensMake"].encode(),piexif.ExifIFD.LensModel:p["LensModel"].encode(),piexif.ExifIFD.FocalLength:p["FocalLength"],piexif.ExifIFD.FNumber:p["FNumber"],piexif.ExifIFD.ExposureTime:p["ExposureTime"],piexif.ExifIFD.ISOSpeedRatings:p["ISO"],piexif.ExifIFD.Flash:p["Flash"],piexif.ExifIFD.WhiteBalance:p["WB"],piexif.ExifIFD.ColorSpace:p["CS"],piexif.ExifIFD.ExifVersion:p["EV"],piexif.ExifIFD.FlashpixVersion:p["FPV"]},
+          "GPS":_gps_block(loc, dt),
           "1st":{},"thumbnail":None}
     img=Image.open(src).convert("RGB")
     if sid: img=_synthid_strip(img)
     out=os.path.join(out_dir,_rand_fn(".jpg"))
-    img.save(out,"JPEG",exif=piexif.dump(exif),quality=95)
+    # save without xmp=/icc_profile= so no source provenance sidecar rides along
+    img.save(out,"JPEG",exif=piexif.dump(exif),quality=random.randint(93,96))
     log(f"  ✓  {os.path.basename(src)} → {os.path.basename(out)}  [{p['label']} · {loc['name']}{'  · SynthID✗' if sid else ''}]")
+    return out
 
 def process_video(src, out_dir, key, sid, log, randomize_location=True):
-    p=PROFILES[key]; ts=_rand_tsiso(); loc=_pick_loc(randomize_location); lat,lon=loc["lat"],loc["lon"]
+    p=PROFILES[key]; dt=_rand_dt(); ts=dt.strftime("%Y-%m-%dT%H:%M:%S")
+    loc=_jittered_loc(randomize_location); lat,lon=loc["lat"],loc["lon"]
     out=os.path.join(out_dir,_rand_fn(".mp4"))
-    cmd=["ffmpeg","-y","-i",src]
-    if sid: cmd+=["-vf","scale=iw*0.997:ih*0.997,scale=iw/0.997:ih/0.997,unsharp=3:3:0.3","-c:v","libx264","-crf",str(random.randint(19,22)),"-preset","slow","-c:a","aac","-b:a","192k"]
-    else:   cmd+=["-c:v","libx264","-crf","20","-preset","medium","-c:a","aac"]
-    for k,v in p["ffmeta"].items(): cmd+=["-metadata",f"{k}={v}"]
-    cmd+=["-metadata",f"creation_time={ts}","-metadata",f"location={lat:+.4f}{lon:+.4f}/","-movflags","+faststart",out]
+    # -map_metadata -1 drops ALL source container metadata (incl. AI/C2PA tags)
+    # before we write our own.
+    cmd=["ffmpeg","-y","-i",src,"-map_metadata","-1"]
+    # trunc(.../2)*2 keeps every intermediate dimension even so libx264/yuv420p
+    # accepts it (a raw 0.997 factor can yield odd dimensions and fail the encode).
+    if sid: cmd+=["-vf","scale=trunc(iw*0.997/2)*2:trunc(ih*0.997/2)*2,scale=trunc(iw/0.997/2)*2:trunc(ih/0.997/2)*2,unsharp=3:3:0.3","-c:v","libx264","-crf",str(random.randint(19,22)),"-preset","slow","-pix_fmt","yuv420p","-c:a","aac","-b:a","192k"]
+    else:   cmd+=["-c:v","libx264","-crf","20","-preset","medium","-pix_fmt","yuv420p","-c:a","aac"]
+    cmd+=["-metadata",f"make={p['Make']}","-metadata",f"model={p['ffmeta_model']}"]
+    if p["Make"]=="Apple":
+        cmd+=["-metadata",f"com.apple.quicktime.make={p['Make']}","-metadata",f"com.apple.quicktime.model={p['ffmeta_model']}","-metadata",f"com.apple.quicktime.software={_iso_software(p)}"]
+    # use_metadata_tags is required for the com.apple.quicktime.* keys to persist
+    # into the mov metadata atom instead of being dropped as non-standard.
+    cmd+=["-metadata",f"creation_time={ts}","-metadata",f"location={lat:+.4f}{lon:+.4f}/","-metadata",f"com.apple.quicktime.location.ISO6709={lat:+.4f}{lon:+.4f}/","-movflags","use_metadata_tags+faststart",out]
     r=subprocess.run(cmd,capture_output=True,text=True)
     if r.returncode!=0: raise RuntimeError(r.stderr[-200:])
     log(f"  ✓  {os.path.basename(src)} → {os.path.basename(out)}  [{p['label']} · {loc['name']}{'  · SynthID✗' if sid else ''}]")
+    return out
+
+
+def read_image_metadata(path):
+    """Read back the spoof-relevant EXIF fields — used by the /verify self-check
+    and the pipeline audit log to prove processing actually took effect."""
+    exif = piexif.load(path)
+    def s(ifd, tag):
+        v = exif.get(ifd, {}).get(tag)
+        return v.decode(errors="replace") if isinstance(v, bytes) else v
+    return {
+        "Make": s("0th", piexif.ImageIFD.Make),
+        "Model": s("0th", piexif.ImageIFD.Model),
+        "Software": s("0th", piexif.ImageIFD.Software),
+        "DateTimeOriginal": s("Exif", piexif.ExifIFD.DateTimeOriginal),
+        "LensModel": s("Exif", piexif.ExifIFD.LensModel),
+        "GPSLatitude": exif.get("GPS", {}).get(piexif.GPSIFD.GPSLatitude),
+        "GPSLongitude": exif.get("GPS", {}).get(piexif.GPSIFD.GPSLongitude),
+        "GPSLatitudeRef": s("GPS", piexif.GPSIFD.GPSLatitudeRef),
+    }
+
+
+def verify_image_spoof(path, key):
+    """True when the output metadata matches the requested profile and carries a
+    US GPS point — the assertion behind the pipeline's fail-closed gate."""
+    p = PROFILES[key]
+    m = read_image_metadata(path)
+    gps = m.get("GPSLatitude")
+    lat = (gps[0][0]/gps[0][1] + gps[1][0]/gps[1][1]/60 + gps[2][0]/gps[2][1]/3600) if gps else None
+    us_lat = lat is not None and 24.0 <= lat <= 49.5 and m.get("GPSLatitudeRef") == "N"
+    return {
+        "verified": m.get("Make") == p["Make"] and m.get("Model") == p["Model"] and us_lat,
+        "metadata": m,
+    }
 
 
 # ─── GUI ──────────────────────────────────────────────────────────────────────

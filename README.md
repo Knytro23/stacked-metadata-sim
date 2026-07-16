@@ -19,15 +19,14 @@ This repo bundles the pieces together:
 
 ## Features
 
-- **Images** — jpg, jpeg, png, tiff, webp, heic
+- **Images** — jpg, jpeg, png, tiff, webp, heic (HEIC decoded via `pillow-heif`; output is re-encoded JPEG)
 - **Videos** — mp4, mov, avi, mkv, m4v, 3gp (`ffmpeg` required)
-- **Device profiles** — iPhone 15 Pro · iPhone 14 · Samsung S24 Ultra · Pixel 8 Pro · Moto G 2024
-- **GPS spoofing** — NYC, LA, Miami, London, Paris, Tokyo, Dubai, Sydney
-- **Optional GPS randomization** — randomize per file, or keep the stable default location
-- **Timestamp randomization** — random date within last 2 years
-- **Filename randomization** — IMG_XXXXXXXX format
-- **SynthID removal** — frequency-domain perturbation for images, re-encode for video
-- **Website embed** — same service hosts the backend API and the JavaScript widget
+- **Device-matched profiles** — iPhone 15 · iPhone 15 Pro · iPhone 14 · Pixel 8. A swarm device's model string (`iphone15,4`, `iPhone 15 Pro`, …) resolves to the right profile automatically via `resolve_profile()`, so each post is spoofed to match the device it's dispatched to.
+- **US-only GPS** — Los Angeles · Birmingham AL · New York City · Miami, each jittered ~5 km per file so no two posts of the same source image share a GPS point.
+- **Fresh-per-post metadata** — filename (`IMG_####XXXX`), capture timestamp, and GPS are re-randomized on every call; the same source image never yields identical metadata twice.
+- **Coherent capture data** — DateTimeOriginal, GPS date/time, altitude, and video `creation_time` are all derived from one timestamp per file.
+- **AI / SynthID mitigation** — all source EXIF/XMP/C2PA provenance is dropped (image EXIF rebuilt from scratch; video `-map_metadata -1`), plus a pixel-domain perturbation + re-encode to degrade invisible watermarks.
+- **Server-to-server API** — `POST /api/process-one` returns one processed file with a `X-MetadataSim-Verified` header; token-authenticated for internal callers.
 
 ---
 
@@ -98,31 +97,31 @@ The widget supports multiple files, photos and videos, all device profiles, Synt
 
 Endpoints:
 
-- `GET /` — hosted web form
-- `POST /api/process` — upload photos/videos, returns `metadata_output.zip`
-- `GET /embed.js` — drop-in widget script
+- `POST /api/process-one` — **server-to-server**: one file in (`file`), one processed file out, with `X-MetadataSim-*` headers. This is what swarm-service calls per post.
+- `POST /api/process` — batch: upload photos/videos, returns `metadata_output.zip`
+- `GET /verify` — self-check: processes a synthetic image and returns `{ok:true}` only if the spoof took effect (metadata matches profile + US GPS). Use as a health probe.
 - `GET /profiles` — available profile keys/labels
 - `GET /health` — lightweight health check
+- `GET /` and `GET /embed.js` — public web form + widget, **disabled unless `METADATA_SIM_ENABLE_EMBED=1`**
 
-Example:
+Auth: when `METADATA_SIM_TOKEN` is set, the processing endpoints require header `X-MetadataSim-Token: <token>`. Leave unset only for local dev.
+
+`process-one` accepts either `profile` (explicit key) or `device_model` (the swarm device's model string, resolved automatically):
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/process \
-  -F 'files=@photo.jpg' \
-  -F 'files=@video.mp4' \
-  -F 'profile=IPHONE_14' \
+curl -X POST http://127.0.0.1:8000/api/process-one \
+  -H 'X-MetadataSim-Token: <token>' \
+  -F 'file=@photo.jpg' \
+  -F 'device_model=iphone15,4' \
   -F 'remove_synthid=true' \
   -F 'randomize_location=true' \
-  -o metadata_output.zip
+  -D - -o processed.jpg
+# → X-MetadataSim-Profile: IPHONE_15
+#   X-MetadataSim-Verified: true
 ```
 
-Supported profile keys:
-
-- `IPHONE_15`
-- `IPHONE_14`
-- `SAMSUNG_S24`
-- `PIXEL_8`
-- `MOTO_G_2024`
+Supported profile keys: `IPHONE_15`, `IPHONE_15_PRO`, `IPHONE_14`, `PIXEL_8`.
+Model-string resolution lives in `DEVICE_MODEL_MAP` (unknown iPhones → `IPHONE_15`, unknown Androids → `PIXEL_8`).
 
 ---
 
@@ -157,6 +156,8 @@ Recommended env vars:
 
 - `HOST=0.0.0.0`
 - `PORT=8000` or the platform-provided port
+- `METADATA_SIM_TOKEN=<shared-secret>` — **required in prod**; callers send it as `X-MetadataSim-Token`
+- `METADATA_SIM_ENABLE_EMBED=0` — keep the public form/widget off for an internal service
 - `METADATA_SIM_MAX_FILES=50`
 - `METADATA_SIM_MAX_UPLOAD_MB=512`
 - `WEB_TIMEOUT=300` for larger video batches
