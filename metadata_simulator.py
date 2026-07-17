@@ -100,12 +100,18 @@ def resolve_profile(device_model):
 # gets a small random offset (JITTER_DEG, ~a few km) so no two posts of the same
 # source image ever carry the identical GPS point.
 LOCATIONS = [
-    {"name": "Los Angeles",     "lat": 34.0522, "lon": -118.2437, "tz": "-07:00"},
+    {"name": "Los Angeles, CA", "lat": 34.0522, "lon": -118.2437, "tz": "-07:00"},
     {"name": "Birmingham, AL",  "lat": 33.5186, "lon":  -86.8104, "tz": "-05:00"},
-    {"name": "New York City",   "lat": 40.7128, "lon":  -74.0060, "tz": "-04:00"},
-    {"name": "Miami",           "lat": 25.7617, "lon":  -80.1918, "tz": "-04:00"},
+    {"name": "New York, NY",    "lat": 40.7128, "lon":  -74.0060, "tz": "-04:00"},
+    {"name": "Miami, FL",       "lat": 25.7617, "lon":  -80.1918, "tz": "-04:00"},
 ]
 JITTER_DEG = 0.045  # ~5 km at these latitudes
+
+
+def nearest_us_city(lat, lon):
+    """Reverse-map a (jittered) GPS point to the metro it was drawn from — for the
+    dashboard's 'posted from <city, state>' proof line."""
+    return min(LOCATIONS, key=lambda c: (c["lat"] - lat) ** 2 + (c["lon"] - lon) ** 2)["name"]
 
 IMAGE_EXTS = {".jpg",".jpeg",".tiff",".tif",".png",".webp",".heic"}
 VIDEO_EXTS = {".mp4",".mov",".avi",".mkv",".m4v",".3gp"}
@@ -262,7 +268,117 @@ def read_image_metadata(path):
         "GPSLatitude": exif.get("GPS", {}).get(piexif.GPSIFD.GPSLatitude),
         "GPSLongitude": exif.get("GPS", {}).get(piexif.GPSIFD.GPSLongitude),
         "GPSLatitudeRef": s("GPS", piexif.GPSIFD.GPSLatitudeRef),
+        "GPSLongitudeRef": s("GPS", piexif.GPSIFD.GPSLongitudeRef),
     }
+
+
+# Provenance markers that betray AI-generated / edited media in metadata or embedded
+# manifests; scanned as raw bytes so XMP/C2PA/JUMBF and text-chunk tells are all caught.
+_AI_MARKERS = [b"synthid", b"c2pa", b"jumbf", b"trainedalgorithmicmedia", b"digitalsourcetype",
+               b"midjourney", b"dall", b"stable diffusion", b"google ai", b"imagen", b"firefly",
+               b"contentauthenticity", b"grok", b"sora"]
+
+
+def _scan_ai_markers(path):
+    try:
+        data = open(path, "rb").read().lower()
+    except Exception:
+        return []
+    return sorted({m.decode() for m in _AI_MARKERS if m in data})
+
+
+def _fmt_location(lat, lon):
+    us = nearest_us_city(lat, lon)
+    return us if (24 <= lat <= 49.5 and -125 <= lon <= -66) else f"{lat:.3f}, {lon:.3f}"
+
+
+def metadata_snapshot(path, is_image):
+    """A human-readable snapshot of a file's provenance-relevant metadata — used for
+    the dashboard's before/after view so a customer can see exactly what changed.
+    Reads images via PIL (so HEIC — the iPhone default — works, not just JPEG) and
+    video via ffprobe."""
+    ai = _scan_ai_markers(path)
+    if is_image:
+        device = captured = lens = location = None
+        try:
+            from PIL.ExifTags import IFD
+            ex = Image.open(path).getexif()
+            device = " ".join(str(x).strip() for x in [ex.get(271), ex.get(272)] if x) or None  # Make, Model
+            try:
+                exif_ifd = ex.get_ifd(IFD.Exif)
+                captured = exif_ifd.get(36867) or None  # DateTimeOriginal
+                lens = exif_ifd.get(42036) or None       # LensModel
+            except Exception:
+                pass
+            try:
+                g = ex.get_ifd(IFD.GPSInfo)
+                if g and g.get(2) and g.get(4):
+                    dms = lambda v: float(v[0]) + float(v[1]) / 60 + float(v[2]) / 3600
+                    lat, lon = dms(g[2]), dms(g[4])
+                    if g.get(1) == "S":
+                        lat = -lat
+                    if g.get(3) == "W":
+                        lon = -lon
+                    location = _fmt_location(lat, lon)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return {"device": device, "location": location, "captured": captured, "lens": lens, "ai": ai}
+    # Video: ffprobe the container tags (make/model, creation_time, ISO6709 location).
+    device = captured = location = None
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-print_format", "flat",
+                              "-show_entries", "format_tags", path], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            if "com_apple_quicktime_model=" in line:
+                device = line.split("=", 1)[1].strip().strip('"') or device
+            if line.strip().startswith("format.tags.creation_time="):
+                captured = line.split("=", 1)[1].strip().strip('"')
+            if "location_ISO6709=" in line or line.strip().startswith('format.tags.location="'):
+                import re as _re
+                nums = _re.findall(r"[+-]\d+\.\d+", line.split("=", 1)[1])
+                if len(nums) >= 2:
+                    location = _fmt_location(float(nums[0]), float(nums[1]))
+    except Exception:
+        pass
+    return {"device": device, "location": location, "captured": captured, "lens": None, "ai": ai}
+
+
+def applied_summary(path, key, is_image):
+    """The customer-facing applied values (device, US city/state, capture time),
+    read back from the processed file so the dashboard can show what was stamped."""
+    p = PROFILES[key]
+    device = f"{p['Make']} {p['Model']}"
+    lens = p.get("LensModel", "")
+    city, captured = "", ""
+    if is_image:
+        m = read_image_metadata(path)
+        captured = m.get("DateTimeOriginal") or ""
+        g = m.get("GPSLatitude")
+        gl = m.get("GPSLongitude")
+        if g and gl:
+            lat = g[0][0]/g[0][1] + g[1][0]/g[1][1]/60 + g[2][0]/g[2][1]/3600
+            lon = -(gl[0][0]/gl[0][1] + gl[1][0]/gl[1][1]/60 + gl[2][0]/gl[2][1]/3600)
+            city = nearest_us_city(lat, lon)
+    else:
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "error", "-print_format", "flat",
+                 "-show_entries", "format_tags", path],
+                capture_output=True, text=True).stdout
+            for line in out.splitlines():
+                if "creation_time=" in line:
+                    captured = line.split("=", 1)[1].strip().strip('"')
+                if "location_ISO6709=" in line or line.endswith('location="'):
+                    val = line.split("=", 1)[1].strip().strip('"')
+                    import re as _re
+                    nums = _re.findall(r"[+-]\d+\.\d+", val)
+                    if len(nums) >= 2:
+                        city = nearest_us_city(float(nums[0]), float(nums[1]))
+        except Exception:
+            pass
+    return {"device": device, "city": city, "captured": captured, "lens": lens}
 
 
 def verify_image_spoof(path, key):

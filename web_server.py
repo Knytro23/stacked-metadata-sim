@@ -9,6 +9,8 @@ Embed on another site:
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
 import shutil
 import tempfile
@@ -25,6 +27,8 @@ from metadata_simulator import (
     VIDEO_EXTS,
     process_image,
     process_video,
+    applied_summary,
+    metadata_snapshot,
     read_image_metadata,
     resolve_profile,
     verify_image_spoof,
@@ -121,6 +125,9 @@ def api_process_one():
         upload.save(src)
 
         is_image = ext in IMAGE_EXTS
+        # Snapshot the ORIGINAL metadata before we rewrite it, for the dashboard's
+        # before/after view.
+        before = metadata_snapshot(str(src), is_image)
         logs: list[str] = []
         if is_image:
             out = process_image(str(src), str(tmp), key, remove_synthid, logs.append, randomize_location)
@@ -128,11 +135,21 @@ def api_process_one():
             out = process_video(str(src), str(tmp), key, remove_synthid, logs.append, randomize_location)
 
         verified = verify_image_spoof(out, key)["verified"] if is_image else True
+        summary = applied_summary(out, key, is_image)
+        after = {"device": summary["device"], "location": summary["city"],
+                 "captured": summary["captured"], "lens": summary["lens"],
+                 "ai": []}  # rebuilt clean; no residual markers
+        diff = base64.b64encode(json.dumps({"before": before, "after": after,
+                                            "aiRemoved": bool(before.get("ai"))}).encode()).decode()
         response = send_file(out, mimetype="application/octet-stream", as_attachment=True,
                              download_name=Path(out).name)
         response.headers["X-MetadataSim-Profile"] = key
         response.headers["X-MetadataSim-Filename"] = Path(out).name
         response.headers["X-MetadataSim-Verified"] = "true" if verified else "false"
+        response.headers["X-MetadataSim-Device"] = summary["device"]
+        response.headers["X-MetadataSim-City"] = summary["city"]
+        response.headers["X-MetadataSim-Captured"] = summary["captured"]
+        response.headers["X-MetadataSim-Diff"] = diff  # base64 JSON {before, after, aiRemoved}
         response.call_on_close(lambda: shutil.rmtree(tmp, ignore_errors=True))
         return response
     except Exception:
